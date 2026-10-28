@@ -5,6 +5,12 @@ Ported from the original web-based HTML version into a native application that r
 
 ---
 
+## Скачать в один клик   
+[tetris.exe](https://github.com/zgammer/tetris-for-boring-lessons/releases/download/1.0.0app/tetris.exe)   
+[tetris_1.0.0_amd64.deb](https://github.com/zgammer/tetris-for-boring-lessons/releases/download/1.0.0app/tetris_1.0.0_amd64.deb)
+
+---
+
 ## Управление
 
 Управление работает **независимо от раскладки клавиатуры** (используются скан-коды физических клавиш).
