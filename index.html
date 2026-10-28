@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171b18">
+  <title>Тетрис</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #171b18;
+      --line: #394139;
+      --muted: #9da89b;
+      --paper: #f0f3e8;
+      --lime: #d9ff63;
+      --coral: #ff735c;
+      --teal: #66d8c5;
+      --yellow: #ffd166;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--paper);
+      background-color: var(--ink);
+      background-image: radial-gradient(#344035 0.8px, transparent 0.8px);
+      background-size: 22px 22px;
+      font-family: "DejaVu Sans", sans-serif;
+    }
+    button { font: inherit; }
+    .shell { width: min(100% - 40px, 960px); margin: 0 auto; padding: 28px 0 34px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { display: grid; width: 38px; height: 38px; grid-template-columns: repeat(2, 1fr); gap: 3px; transform: rotate(-5deg); }
+    .brand-mark i { border-radius: 2px; background: var(--lime); }
+    .brand-mark i:nth-child(2) { background: var(--coral); }
+    .brand-mark i:nth-child(3) { background: var(--teal); }
+    .brand-mark i:nth-child(4) { background: var(--yellow); }
+    .brand-name { margin: 0; font-size: 21px; font-weight: 900; text-transform: uppercase; }
+    .brand-name span { color: var(--lime); }
+    .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 12px #d9ff6380; }
+    .game-layout { display: grid; grid-template-columns: minmax(150px, 1fr) 300px minmax(150px, 1fr); align-items: start; gap: 28px; padding-top: 30px; }
+    .side { display: grid; gap: 14px; padding-top: 10px; }
+    .panel { padding: 16px; border: 1px solid var(--line); border-radius: 5px; background: #222822e8; }
+    .panel-label { margin: 0 0 12px; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
+    .score-value { color: var(--lime); font-size: 31px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+    .mini-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+    .mini-stats span { display: block; }
+    .mini-stats .panel-label { margin-bottom: 6px; }
+    .mini-stats strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+    .preview-wrap { display: grid; min-height: 112px; place-items: center; border-radius: 3px; background-color: #171b18; background-image: linear-gradient(#283028 1px, transparent 1px), linear-gradient(90deg, #283028 1px, transparent 1px); background-size: 20px 20px; }
+    #next { width: 120px; height: 100px; }
+    .board-wrap { position: relative; width: 300px; height: 600px; overflow: hidden; border: 2px solid #576253; border-radius: 4px; background: #111512; box-shadow: 0 18px 50px #0007, 0 0 0 5px #242b24; }
+    #board { display: block; width: 100%; height: 100%; }
+    .overlay { position: absolute; inset: 0; display: grid; align-content: center; justify-items: center; gap: 10px; padding: 24px; background: #111512e8; text-align: center; }
+    .overlay[hidden] { display: none; }
+    .overlay h2 { margin: 0; color: var(--lime); font-size: 27px; text-transform: uppercase; }
+    .overlay p { margin: 0; color: var(--muted); font-size: 13px; }
+    .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .action { min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; color: var(--paper); background: #293129; cursor: pointer; font-size: 12px; font-weight: 800; transition: border-color 120ms ease, transform 120ms ease, background 120ms ease; }
+    .action:hover { transform: translateY(-1px); border-color: var(--lime); background: #303a2e; }
+    .action:focus-visible { outline: 2px solid var(--lime); outline-offset: 3px; }
+    .action.primary { grid-column: 1 / -1; color: var(--ink); border-color: var(--lime); background: var(--lime); }
+    .keys { display: grid; gap: 10px; }
+    .key-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+    .key-set { display: flex; gap: 4px; }
+    kbd { display: inline-grid; min-width: 25px; height: 24px; padding: 0 5px; place-items: center; border: 1px solid #4a5449; border-bottom-width: 2px; border-radius: 3px; color: var(--paper); background: #303830; font-family: inherit; font-size: 10px; font-weight: 800; }
+    .note { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+    .mobile-controls { display: none; }
+    @media (max-width: 720px) {
+      .shell { width: min(100% - 24px, 440px); padding-top: 16px; }
+      .game-layout { grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 18px; }
+      .board-wrap { grid-column: 1 / -1; grid-row: 1; justify-self: center; width: min(300px, calc((100vw - 56px) * 0.5)); height: auto; aspect-ratio: 1 / 2; }
+      .side { display: contents; }
+      .panel { padding: 12px; }
+      .side.left .panel:first-child { grid-column: 1; grid-row: 2; }
+      .side.left .panel:nth-child(2) { grid-column: 2; grid-row: 2; }
+      .side.right .panel:first-child { grid-column: 1 / -1; grid-row: 3; }
+      .side.right .panel:nth-child(2) { grid-column: 1 / -1; grid-row: 4; }
+      .mobile-controls { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+      .mobile-controls button { min-height: 44px; color: var(--lime); font-size: 16px; touch-action: manipulation; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <h1 class="brand-name">Тет<span>рис</span></h1>
+      </div>
+      <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText" aria-live="polite">Игра идёт</span></div>
+    </header>
+    <section class="game-layout" aria-label="Игра Тетрис">
+      <aside class="side left" aria-label="Результат">
+        <section class="panel">
+          <h2 class="panel-label">Счёт</h2>
+          <div class="score-value" id="score">000000</div>
+          <div class="mini-stats">
+            <div><span class="panel-label">Линии</span><strong id="lines">0</strong></div>
+            <div><span class="panel-label">Уровень</span><strong id="level">1</strong></div>
+          </div>
+        </section>
+        <section class="panel">
+          <h2 class="panel-label">Следующая фигура</h2>
+          <div class="preview-wrap"><canvas id="next" width="120" height="100" aria-label="Следующая фигура"></canvas></div>
+        </section>
+      </aside>
+      <div class="board-wrap">
+        <canvas id="board" width="300" height="600" aria-label="Игровое поле Тетрис"></canvas>
+        <div class="overlay" id="overlay" hidden>
+          <h2 id="overlayTitle">Пауза</h2>
+          <p id="overlayMessage">Нажми P / Esc или продолжи игру</p>
+        </div>
+      </div>
+      <aside class="side right" aria-label="Управление и действия">
+        <section class="panel">
+          <h2 class="panel-label">Клавиши</h2>
+          <div class="keys">
+            <div class="key-row"><span>Движение</span><span class="key-set"><kbd>←</kbd><kbd>→</kbd><kbd>A</kbd><kbd>D</kbd></span></div>
+            <div class="key-row"><span>Поворот</span><span class="key-set"><kbd>↑</kbd><kbd>W</kbd></span></div>
+            <div class="key-row"><span>Ускорить</span><span class="key-set"><kbd>↓</kbd><kbd>S</kbd></span></div>
+            <div class="key-row"><span>Сбросить вниз</span><span class="key-set"><kbd>Space</kbd></span></div>
+            <div class="key-row"><span>Пауза</span><span class="key-set"><kbd>P</kbd><kbd>Esc</kbd></span></div>
+          </div>
+        </section>
+        <section class="panel actions">
+          <h2 class="panel-label" style="grid-column:1/-1">Игра</h2>
+          <button class="action primary" id="restartButton" type="button">Новая игра</button>
+          <button class="action" id="pauseButton" type="button">Пауза</button>
+          <button class="action" id="soundButton" type="button" aria-pressed="false">Звук: выкл.</button>
+        </section>
+        <p class="note">Собирай полные линии, чтобы набирать очки. Чем больше линий, тем быстрее падают фигуры.</p>
+      </aside>
+      <div class="mobile-controls" aria-label="Сенсорное управление">
+        <button class="action" data-action="left" aria-label="Влево">←</button>
+        <button class="action" data-action="rotate" aria-label="Повернуть">↻</button>
+        <button class="action" data-action="down" aria-label="Вниз">↓</button>
+        <button class="action" data-action="right" aria-label="Вправо">→</button>
+      </div>
+    </section>
+  </main>
+  <script>
+    (() => {
+      const columns = 10;
+      const rows = 20;
+      const cell = 30;
+      const colors = [null, "#66d8c5", "#ffd166", "#c98bff", "#d9ff63", "#ff735c", "#62b9ff", "#f39b67"];
+      const shapes = [
+        [[1, 1, 1, 1]], [[2, 2], [2, 2]], [[0, 3, 0], [3, 3, 3]],
+        [[4, 4, 0], [0, 4, 4]], [[0, 5, 5], [5, 5, 0]],
+        [[6, 0, 0], [6, 6, 6]], [[0, 0, 7], [7, 7, 7]],
+      ];
+      const boardCanvas = document.querySelector("#board");
+      const boardContext = boardCanvas.getContext("2d");
+      const nextCanvas = document.querySelector("#next");
+      const nextContext = nextCanvas.getContext("2d");
+      const overlay = document.querySelector("#overlay");
+      let board;
+      let current;
+      let nextShape;
+      let bag;
+      let score = 0;
+      let lines = 0;
+      let level = 1;
+      let paused = false;
+      let gameOver = false;
+      let soundEnabled = false;
+      let audioContext;
+      let lastDrop = 0;
+
+      function emptyBoard() { return Array.from({ length: rows }, () => Array(columns).fill(0)); }
+      function refillBag() {
+        bag = shapes.map((_, index) => index);
+        for (let index = bag.length - 1; index > 0; index--) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          [bag[index], bag[swapIndex]] = [bag[swapIndex], bag[index]];
+        }
+      }
+      function takeShape() {
+        if (!bag.length) refillBag();
+        return shapes[bag.pop()].map((row) => row.slice());
+      }
+      function spawn() {
+        const shape = nextShape;
+        nextShape = takeShape();
+        current = { shape, x: Math.floor((columns - shape[0].length) / 2), y: 0 };
+        if (collides(current)) endGame();
+        drawNext();
+      }
+      function collides(piece) {
+        return piece.shape.some((row, y) => row.some((value, x) => {
+          if (!value) return false;
+          const boardX = piece.x + x;
+          const boardY = piece.y + y;
+          return boardX < 0 || boardX >= columns || boardY >= rows || (boardY >= 0 && board[boardY][boardX]);
+        }));
+      }
+      function drawCell(context, x, y, value, size) {
+        if (!value) return;
+        const inset = Math.max(1, Math.round(size * 0.07));
+        context.fillStyle = colors[value];
+        context.fillRect(x * size + inset, y * size + inset, size - inset * 2, size - inset * 2);
+        context.fillStyle = "#ffffff35";
+        context.fillRect(x * size + inset, y * size + inset, size - inset * 2, Math.max(2, inset));
+        context.fillStyle = "#00000022";
+        context.fillRect(x * size + inset, (y + 1) * size - inset * 2, size - inset * 2, inset);
+      }
+      function draw() {
+        boardContext.fillStyle = "#111512";
+        boardContext.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+        boardContext.strokeStyle = "#283028";
+        boardContext.lineWidth = 1;
+        for (let x = 1; x < columns; x++) {
+          boardContext.beginPath(); boardContext.moveTo(x * cell + 0.5, 0); boardContext.lineTo(x * cell + 0.5, rows * cell); boardContext.stroke();
+        }
+        for (let y = 1; y < rows; y++) {
+          boardContext.beginPath(); boardContext.moveTo(0, y * cell + 0.5); boardContext.lineTo(columns * cell, y * cell + 0.5); boardContext.stroke();
+        }
+        board.forEach((row, y) => row.forEach((value, x) => drawCell(boardContext, x, y, value, cell)));
+        if (current) {
+          const ghost = { ...current, y: current.y };
+          while (!collides({ ...ghost, y: ghost.y + 1 })) ghost.y++;
+          current.shape.forEach((row, y) => row.forEach((value, x) => {
+            if (value) { boardContext.globalAlpha = 0.24; drawCell(boardContext, ghost.x + x, ghost.y + y, value, cell); boardContext.globalAlpha = 1; }
+          }));
+          current.shape.forEach((row, y) => row.forEach((value, x) => drawCell(boardContext, current.x + x, current.y + y, value, cell)));
+        }
+      }
+      function drawNext() {
+        nextContext.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+        const size = 20;
+        const offsetX = Math.floor((nextCanvas.width - nextShape[0].length * size) / 2);
+        const offsetY = Math.floor((nextCanvas.height - nextShape.length * size) / 2);
+        nextShape.forEach((row, y) => row.forEach((value, x) => {
+          if (value) { nextContext.save(); nextContext.translate(offsetX, offsetY); drawCell(nextContext, x, y, value, size); nextContext.restore(); }
+        }));
+      }
+      function updateStats() {
+        document.querySelector("#score").textContent = String(score).padStart(6, "0");
+        document.querySelector("#lines").textContent = lines;
+        document.querySelector("#level").textContent = level;
+      }
+      function setStatus(text, active) {
+        document.querySelector("#statusText").textContent = text;
+        document.querySelector("#statusDot").style.background = active ? "var(--lime)" : "var(--coral)";
+      }
+      function playTone(frequency, duration = 0.06) {
+        if (!soundEnabled) return;
+        audioContext ??= new AudioContext();
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = "square";
+        oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0.035, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration);
+        oscillator.connect(gain).connect(audioContext.destination);
+        oscillator.start(); oscillator.stop(audioContext.currentTime + duration);
+      }
+      function lockPiece() {
+        current.shape.forEach((row, y) => row.forEach((value, x) => {
+          if (value && current.y + y >= 0) board[current.y + y][current.x + x] = value;
+        }));
+        let cleared = 0;
+        board = board.filter((row) => {
+          if (row.every(Boolean)) { cleared++; return false; }
+          return true;
+        });
+        while (board.length < rows) board.unshift(Array(columns).fill(0));
+        if (cleared) {
+          score += [0, 100, 300, 500, 800][cleared] * level;
+          lines += cleared;
+          level = Math.floor(lines / 10) + 1;
+          playTone(660, 0.13);
+          updateStats();
+        }
+        spawn();
+      }
+      function moveDown(soft = false) {
+        if (paused || gameOver) return;
+        current.y++;
+        if (collides(current)) { current.y--; lockPiece(); }
+        else if (soft) { score++; updateStats(); }
+        draw();
+      }
+      function rotate() {
+        if (paused || gameOver) return;
+        const rotated = current.shape[0].map((_, column) => current.shape.map((row) => row[column]).reverse());
+        const previous = current.shape;
+        current.shape = rotated;
+        for (const shift of [0, -1, 1, -2, 2]) {
+          current.x += shift;
+          if (!collides(current)) { draw(); playTone(420); return; }
+          current.x -= shift;
+        }
+        current.shape = previous;
+      }
+      function hardDrop() {
+        if (paused || gameOver) return;
+        let distance = 0;
+        while (!collides({ ...current, y: current.y + 1 })) { current.y++; distance++; }
+        score += distance * 2;
+        updateStats();
+        playTone(240);
+        lockPiece();
+        draw();
+      }
+      function togglePause() {
+        if (gameOver) return;
+        paused = !paused;
+        overlay.hidden = !paused;
+        document.querySelector("#overlayTitle").textContent = "Пауза";
+        document.querySelector("#overlayMessage").textContent = "Нажми P или продолжи игру";
+        document.querySelector("#pauseButton").textContent = paused ? "Продолжить" : "Пауза";
+        setStatus(paused ? "Пауза" : "Игра идёт", !paused);
+      }
+      function endGame() {
+        gameOver = true;
+        paused = false;
+        overlay.hidden = false;
+        document.querySelector("#overlayTitle").textContent = "Игра окончена";
+        document.querySelector("#overlayMessage").textContent = `Счёт: ${score}. Нажми «Новая игра»`;
+        document.querySelector("#pauseButton").textContent = "Пауза";
+        setStatus("Конец игры", false);
+      }
+      function restart() {
+        board = emptyBoard(); score = 0; lines = 0; level = 1; paused = false; gameOver = false;
+        refillBag(); nextShape = takeShape(); overlay.hidden = true;
+        document.querySelector("#pauseButton").textContent = "Пауза";
+        setStatus("Игра идёт", true); updateStats(); spawn(); draw();
+      }
+      function act(action) {
+        if (paused || gameOver) return;
+        if (action === "left" || action === "right") {
+          const previousX = current.x;
+          current.x += action === "left" ? -1 : 1;
+          if (collides(current)) current.x = previousX;
+          else playTone(300);
+          draw();
+        } else if (action === "rotate") rotate();
+        else if (action === "down") moveDown(true);
+        else if (action === "drop") hardDrop();
+      }
+      document.addEventListener("keydown", (event) => {
+        const key = event.key.toLowerCase();
+        const handled = ["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "x", "p"];
+        if (!handled.includes(key)) return;
+        event.preventDefault();
+        if (key === "p") { togglePause(); return; }
+        if (paused || gameOver) return;
+        if (key === "arrowleft" || key === "a") act("left");
+        else if (key === "arrowright" || key === "d") act("right");
+        else if (key === "arrowup" || key === "w" || key === "x") act("rotate");
+        else if (key === "arrowdown" || key === "s") act("down");
+        else if (key === " ") act("drop");
+      });
+      document.querySelector("#restartButton").addEventListener("click", restart);
+      document.querySelector("#pauseButton").addEventListener("click", togglePause);
+      document.querySelector("#soundButton").addEventListener("click", (event) => {
+        soundEnabled = !soundEnabled;
+        event.currentTarget.textContent = soundEnabled ? "Звук: вкл." : "Звук: выкл.";
+        event.currentTarget.setAttribute("aria-pressed", String(soundEnabled));
+        if (soundEnabled) playTone(500);
+      });
+      document.querySelectorAll("[data-action]").forEach((button) => {
+        button.addEventListener("pointerdown", (event) => { event.preventDefault(); act(button.dataset.action); });
+      });
+      function frame(time = 0) {
+        if (!paused && !gameOver && time - lastDrop > Math.max(90, 800 - (level - 1) * 65)) { moveDown(); lastDrop = time; }
+        requestAnimationFrame(frame);
+      }
+      restart();
+      requestAnimationFrame(frame);
+    })();
+  </script>
+</body>
+</html>
