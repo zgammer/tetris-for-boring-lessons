@@ -5,6 +5,12 @@ Ported from the original web-based HTML version into a native application that r
 
 ---
 
+## Скачать в один клик   
+[tetris.exe](https://github.com/zgammer/tetris-for-boring-lessons/releases/download/1.0.0app/tetris.exe)   
+[tetris_1.0.0_amd64.deb](https://github.com/zgammer/tetris-for-boring-lessons/releases/download/1.0.0app/tetris_1.0.0_amd64.deb)
+
+---
+
 ## Управление
 
 Управление работает **независимо от раскладки клавиатуры** (используются скан-коды физических клавиш).
@@ -19,6 +25,9 @@ Ported from the original web-based HTML version into a native application that r
 | Пауза               | `P` или `Esc`        |
 | Новая игра          | `R`                  |
 | Звук вкл./выкл.     | `M`                  |
+
+Поддерживается **автоповтор действий при зажатии клавиш** (DAS / ARR): зажмите клавиши перемещения (`←`/`→`/`A`/`D`) или ускорения (`↓`/`S`) для непрерывного движения.  
+Скорость падения блоков увеличивается плавно: скорость 10-го уровня теперь достигается на 30-м уровне (плавный переход от 800 мс на 1 уровне до 215 мс на 30 уровне).
 
 ---
 

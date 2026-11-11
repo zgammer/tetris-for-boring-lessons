@@ -17,6 +17,8 @@ import pygame
 from pygame.locals import (
     QUIT,
     KEYDOWN,
+    KEYUP,
+    ACTIVEEVENT,
     VIDEORESIZE,
 )
 
@@ -67,6 +69,12 @@ SC_S = pygame.KSCAN_S  # 22
 SC_D = pygame.KSCAN_D  # 7
 SC_P = pygame.KSCAN_P  # 19
 SC_X = pygame.KSCAN_X  # 27
+
+# ─── Key repeat timings (DAS / ARR) in milliseconds ─────────────────
+DAS_DELAY = 170       # initial delay before repeating horizontal movement
+ARR_INTERVAL = 45     # interval between horizontal moves while held
+DAS_DOWN = 90         # initial delay for soft drop
+ARR_DOWN = 35         # interval between soft drops while held
 
 # ─── Helpers ──────────────────────────────────────────────────────────
 
@@ -293,7 +301,12 @@ class TetrisGame:
 
     @property
     def drop_interval(self):
-        return max(90, 800 - (self.level - 1) * 65)
+        """Interval between gravity drops in milliseconds.
+        Level 1 starts at 800ms.
+        Level 30 reaches 215ms (the speed previously at Level 10).
+        Smooth gradual progression of ~(585/29) ≈ 20.17ms faster per level.
+        """
+        return max(90, int(round(800 - (self.level - 1) * (585 / 29))))
 
 
 # ─── Renderer ─────────────────────────────────────────────────────────
@@ -652,6 +665,25 @@ def main():
     clock = pygame.time.Clock()
     last_drop = pygame.time.get_ticks()
 
+    # Held key states for auto-repeat (DAS / ARR)
+    held_left = False
+    held_right = False
+    horiz_dir = None       # "left", "right", or None
+    horiz_timer = 0
+
+    held_down = False
+    down_timer = 0
+
+    def reset_held():
+        nonlocal held_left, held_right, horiz_dir, horiz_timer
+        nonlocal held_down, down_timer
+        held_left = False
+        held_right = False
+        horiz_dir = None
+        horiz_timer = 0
+        held_down = False
+        down_timer = 0
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -661,50 +693,123 @@ def main():
             elif event.type == VIDEORESIZE:
                 renderer.handle_resize(event.w, event.h)
 
+            elif event.type == ACTIVEEVENT:
+                if hasattr(event, "gain") and not event.gain:
+                    reset_held()
+
             elif event.type == KEYDOWN:
                 sc = event.scancode  # layout-independent
+                now = pygame.time.get_ticks()
 
                 # Escape always pauses
-                if event.key == pygame.K_ESCAPE:
+                if event.key == pygame.K_ESCAPE or sc == SC_P:
                     game.toggle_pause()
-
-                # P — pause (by scancode for layout independence)
-                elif sc == SC_P:
-                    game.toggle_pause()
+                    reset_held()
 
                 # R — restart (use scancode)
                 elif sc == pygame.KSCAN_R:
                     game.restart()
-                    last_drop = pygame.time.get_ticks()
+                    reset_held()
+                    last_drop = now
 
                 # M — toggle sound
                 elif sc == pygame.KSCAN_M:
                     sound.toggle()
 
-                # Movement & actions (arrows always work by keycode)
-                elif event.key == pygame.K_LEFT or sc == SC_A:
-                    if game.move_left():
-                        sound.play_tone(300)
+                elif not game.paused and not game.game_over:
+                    # Space — hard drop (single press only, does not repeat on hold)
+                    if event.key == pygame.K_SPACE:
+                        cleared = game.hard_drop()
+                        sound.play_tone(240)
+                        if cleared and cleared > 0:
+                            sound.play_tone(660, 0.13)
+                        last_drop = now
+                        if held_down:
+                            down_timer = now + DAS_DOWN
+
+                    # Movement & rotation with auto-repeat setup
+                    elif event.key == pygame.K_LEFT or sc == SC_A:
+                        held_left = True
+                        horiz_dir = "left"
+                        horiz_timer = now + DAS_DELAY
+                        if game.move_left():
+                            sound.play_tone(300)
+
+                    elif event.key == pygame.K_RIGHT or sc == SC_D:
+                        held_right = True
+                        horiz_dir = "right"
+                        horiz_timer = now + DAS_DELAY
+                        if game.move_right():
+                            sound.play_tone(300)
+
+                    # Rotate — single action, does not repeat on hold
+                    elif event.key == pygame.K_UP or sc == SC_W or sc == SC_X:
+                        if game.rotate():
+                            sound.play_tone(420)
+
+                    elif event.key == pygame.K_DOWN or sc == SC_S:
+                        held_down = True
+                        down_timer = now + DAS_DOWN
+                        cleared = game.move_down(soft=True)
+                        last_drop = now
+                        if cleared and cleared > 0:
+                            sound.play_tone(660, 0.13)
+                        if cleared >= 0:
+                            down_timer = now + DAS_DOWN
+
+            elif event.type == KEYUP:
+                sc = event.scancode
+                now = pygame.time.get_ticks()
+
+                if event.key == pygame.K_LEFT or sc == SC_A:
+                    held_left = False
+                    if horiz_dir == "left":
+                        if held_right:
+                            horiz_dir = "right"
+                            horiz_timer = now + DAS_DELAY
+                        else:
+                            horiz_dir = None
 
                 elif event.key == pygame.K_RIGHT or sc == SC_D:
-                    if game.move_right():
-                        sound.play_tone(300)
-
-                elif event.key == pygame.K_UP or sc == SC_W or sc == SC_X:
-                    if game.rotate():
-                        sound.play_tone(420)
+                    held_right = False
+                    if horiz_dir == "right":
+                        if held_left:
+                            horiz_dir = "left"
+                            horiz_timer = now + DAS_DELAY
+                        else:
+                            horiz_dir = None
 
                 elif event.key == pygame.K_DOWN or sc == SC_S:
-                    game.move_down(soft=True)
+                    held_down = False
 
-                elif event.key == pygame.K_SPACE:
-                    cleared = game.hard_drop()
-                    sound.play_tone(240)
-                    if cleared:
-                        sound.play_tone(660, 0.13)
-
-        # Auto-drop
+        # Held keys auto-repeat (DAS / ARR)
         now = pygame.time.get_ticks()
+        if not game.paused and not game.game_over:
+            # Horizontal movement repeat
+            if horiz_dir == "left" and held_left:
+                if now >= horiz_timer:
+                    if game.move_left():
+                        sound.play_tone(300)
+                    horiz_timer = now + ARR_INTERVAL
+            elif horiz_dir == "right" and held_right:
+                if now >= horiz_timer:
+                    if game.move_right():
+                        sound.play_tone(300)
+                    horiz_timer = now + ARR_INTERVAL
+
+            # Soft drop repeat
+            if held_down:
+                if now >= down_timer:
+                    cleared = game.move_down(soft=True)
+                    last_drop = now
+                    if cleared and cleared > 0:
+                        sound.play_tone(660, 0.13)
+                    if cleared >= 0:
+                        down_timer = now + DAS_DOWN
+                    else:
+                        down_timer = now + ARR_DOWN
+
+        # Auto-drop (natural gravity)
         if not game.paused and not game.game_over:
             if now - last_drop > game.drop_interval:
                 cleared = game.move_down()

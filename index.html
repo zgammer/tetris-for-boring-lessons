@@ -309,8 +309,31 @@
         lockPiece();
         draw();
       }
+      const DAS_DELAY = 170;
+      const ARR_INTERVAL = 45;
+      const DAS_DOWN = 90;
+      const ARR_DOWN = 35;
+
+      let heldLeft = false;
+      let heldRight = false;
+      let horizDir = null;
+      let horizTimer = 0;
+
+      let heldDown = false;
+      let downTimer = 0;
+
+      function resetHeldKeys() {
+        heldLeft = false;
+        heldRight = false;
+        horizDir = null;
+        horizTimer = 0;
+        heldDown = false;
+        downTimer = 0;
+      }
+
       function togglePause() {
         if (gameOver) return;
+        resetHeldKeys();
         paused = !paused;
         overlay.hidden = !paused;
         document.querySelector("#overlayTitle").textContent = "Пауза";
@@ -319,6 +342,7 @@
         setStatus(paused ? "Пауза" : "Игра идёт", !paused);
       }
       function endGame() {
+        resetHeldKeys();
         gameOver = true;
         paused = false;
         overlay.hidden = false;
@@ -328,10 +352,12 @@
         setStatus("Конец игры", false);
       }
       function restart() {
+        resetHeldKeys();
         board = emptyBoard(); score = 0; lines = 0; level = 1; paused = false; gameOver = false;
         refillBag(); nextShape = takeShape(); overlay.hidden = true;
         document.querySelector("#pauseButton").textContent = "Пауза";
         setStatus("Игра идёт", true); updateStats(); spawn(); draw();
+        lastDrop = performance.now();
       }
       function act(action) {
         if (paused || gameOver) return;
@@ -350,14 +376,69 @@
         const handled = ["arrowleft", "arrowright", "arrowup", "arrowdown", " ", "a", "d", "w", "s", "x", "p"];
         if (!handled.includes(key)) return;
         event.preventDefault();
+
+        // Browser keydown repeat is ignored; smooth DAS/ARR is handled in the animation frame loop
+        if (event.repeat) return;
+
         if (key === "p") { togglePause(); return; }
         if (paused || gameOver) return;
-        if (key === "arrowleft" || key === "a") act("left");
-        else if (key === "arrowright" || key === "d") act("right");
-        else if (key === "arrowup" || key === "w" || key === "x") act("rotate");
-        else if (key === "arrowdown" || key === "s") act("down");
-        else if (key === " ") act("drop");
+
+        const now = performance.now();
+        if (key === "arrowleft" || key === "a") {
+          heldLeft = true;
+          horizDir = "left";
+          horizTimer = now + DAS_DELAY;
+          act("left");
+        } else if (key === "arrowright" || key === "d") {
+          heldRight = true;
+          horizDir = "right";
+          horizTimer = now + DAS_DELAY;
+          act("right");
+        } else if (key === "arrowup" || key === "w" || key === "x") {
+          act("rotate");
+        } else if (key === "arrowdown" || key === "s") {
+          heldDown = true;
+          downTimer = now + DAS_DOWN;
+          lastDrop = now;
+          act("down");
+        } else if (key === " ") {
+          lastDrop = now;
+          if (heldDown) downTimer = now + DAS_DOWN;
+          act("drop");
+        }
       });
+
+      document.addEventListener("keyup", (event) => {
+        const key = event.key.toLowerCase();
+        const now = performance.now();
+
+        if (key === "arrowleft" || key === "a") {
+          heldLeft = false;
+          if (horizDir === "left") {
+            if (heldRight) {
+              horizDir = "right";
+              horizTimer = now + DAS_DELAY;
+            } else {
+              horizDir = null;
+            }
+          }
+        } else if (key === "arrowright" || key === "d") {
+          heldRight = false;
+          if (horizDir === "right") {
+            if (heldLeft) {
+              horizDir = "left";
+              horizTimer = now + DAS_DELAY;
+            } else {
+              horizDir = null;
+            }
+          }
+        } else if (key === "arrowdown" || key === "s") {
+          heldDown = false;
+        }
+      });
+
+      window.addEventListener("blur", resetHeldKeys);
+
       document.querySelector("#restartButton").addEventListener("click", restart);
       document.querySelector("#pauseButton").addEventListener("click", togglePause);
       document.querySelector("#soundButton").addEventListener("click", (event) => {
@@ -366,11 +447,82 @@
         event.currentTarget.setAttribute("aria-pressed", String(soundEnabled));
         if (soundEnabled) playTone(500);
       });
+
       document.querySelectorAll("[data-action]").forEach((button) => {
-        button.addEventListener("pointerdown", (event) => { event.preventDefault(); act(button.dataset.action); });
+        const action = button.dataset.action;
+        const start = (e) => {
+          e.preventDefault();
+          if (paused || gameOver) return;
+          const now = performance.now();
+          if (action === "left") {
+            heldLeft = true; horizDir = "left"; horizTimer = now + DAS_DELAY; act("left");
+          } else if (action === "right") {
+            heldRight = true; horizDir = "right"; horizTimer = now + DAS_DELAY; act("right");
+          } else if (action === "rotate") {
+            act("rotate");
+          } else if (action === "down") {
+            heldDown = true; downTimer = now + DAS_DOWN; lastDrop = now; act("down");
+          }
+        };
+        const end = () => {
+          const now = performance.now();
+          if (action === "left") {
+            heldLeft = false;
+            if (horizDir === "left") {
+              if (heldRight) { horizDir = "right"; horizTimer = now + DAS_DELAY; }
+              else horizDir = null;
+            }
+          } else if (action === "right") {
+            heldRight = false;
+            if (horizDir === "right") {
+              if (heldLeft) { horizDir = "left"; horizTimer = now + DAS_DELAY; }
+              else horizDir = null;
+            }
+          } else if (action === "down") {
+            heldDown = false;
+          }
+        };
+        button.addEventListener("pointerdown", start);
+        button.addEventListener("pointerup", end);
+        button.addEventListener("pointercancel", end);
+        button.addEventListener("pointerleave", end);
       });
+
+      function getDropInterval() {
+        // Level 1 starts at 800ms. Level 30 reaches former Level 10 speed (215ms).
+        // Smooth gradual progression of ~(585/29) ≈ 20.17ms faster per level.
+        return Math.max(90, Math.round(800 - (level - 1) * (585 / 29)));
+      }
+
       function frame(time = 0) {
-        if (!paused && !gameOver && time - lastDrop > Math.max(90, 800 - (level - 1) * 65)) { moveDown(); lastDrop = time; }
+        if (!paused && !gameOver) {
+          // Held keys auto-repeat (DAS / ARR)
+          if (horizDir === "left" && heldLeft) {
+            if (time >= horizTimer) {
+              act("left");
+              horizTimer = time + ARR_INTERVAL;
+            }
+          } else if (horizDir === "right" && heldRight) {
+            if (time >= horizTimer) {
+              act("right");
+              horizTimer = time + ARR_INTERVAL;
+            }
+          }
+
+          if (heldDown) {
+            if (time >= downTimer) {
+              act("down");
+              lastDrop = time;
+              downTimer = time + ARR_DOWN;
+            }
+          }
+
+          // Natural gravity auto-drop
+          if (time - lastDrop > getDropInterval()) {
+            moveDown();
+            lastDrop = time;
+          }
+        }
         requestAnimationFrame(frame);
       }
       restart();
